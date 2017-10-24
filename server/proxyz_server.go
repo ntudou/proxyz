@@ -69,10 +69,10 @@ func netUnCompress(src, dst net.Conn) error {
 	return err
 }
 
-func eachListen(listen, backend string) error {
+func eachListen(listen, backend string) {
 	l, err := net.Listen("tcp", listen)
 	if err != nil {
-		return err
+		log.Fatal(err.Error())
 	}
 	defer l.Close()
 
@@ -83,10 +83,8 @@ func eachListen(listen, backend string) error {
 			tc.Close()
 			continue
 		}
-
 		go eachConn(backend, tc)
 	}
-	return nil
 }
 
 func main() {
@@ -106,10 +104,8 @@ func main() {
 	}
 	max := local + pcount
 	for ; local < max; local++ {
-		err := eachListen(":"+strconv.FormatInt(local, 10), remote)
-		if err != nil {
-			log.Fatal(err.Error())
-		}
+		go eachListen(":"+strconv.FormatInt(local, 10), remote)
+
 	}
 
 	for {
