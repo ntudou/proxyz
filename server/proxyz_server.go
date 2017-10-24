@@ -1,4 +1,4 @@
-package main
+package server
 
 import (
 	"flag"
@@ -12,7 +12,7 @@ import (
 )
 
 func eachConn(remote string, tc net.Conn) {
-	uc, err := net.DialTimeout("tcp", remote,time.Minute)
+	uc, err := net.Dial("tcp", remote)
 	if err != nil {
 		log.Println("get remote conn :", err.Error())
 		uc.Close()
