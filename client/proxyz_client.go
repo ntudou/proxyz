@@ -59,9 +59,11 @@ func netUnCompress(src, dst net.Conn) error {
 		if nr > 0 {
 			rb := bytes.NewReader(buf[0:nr])
 			out:=&bytes.Buffer{}
-			r, _ := zlib.NewReader(rb)
-			log.Println(out)
-			log.Println(r)
+			r, err := zlib.NewReader(rb)
+			if r==nil{
+				log.Println(err)
+				break
+			}
 			io.Copy(out, r)
 			r.Close()
 			_, err = dst.Write(out.Bytes())
