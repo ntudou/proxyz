@@ -12,14 +12,14 @@ import (
 )
 
 func eachConn(remote string, tc net.Conn) {
-	uc, err := net.DialTimeout("tcp", remote,time.Minute)
+	uc, err := net.DialTimeout("tcp", remote, time.Minute)
 	if err != nil {
 		log.Println("get remote conn :", err.Error())
 		uc.Close()
 		return
 	}
-	go netCompress(uc,tc)
-	go netUnCompress(tc,uc)
+	go netCompress(tc, uc)
+	go netUnCompress(uc, tc)
 }
 
 func netCompress(src, dst net.Conn) error {
@@ -27,7 +27,7 @@ func netCompress(src, dst net.Conn) error {
 	var err error
 	for {
 		nr, err := src.Read(buf)
-		if err!=nil{
+		if err != nil {
 			break
 		}
 		if nr > 0 {
@@ -69,26 +69,6 @@ func netUnCompress(src, dst net.Conn) error {
 	return err
 }
 
-func eachListen(listen, backend string) error {
-	l, err := net.Listen("tcp", listen)
-	if err != nil {
-		return err
-	}
-	defer l.Close()
-
-	for {
-		tc, err := l.Accept()
-		if err != nil {
-			log.Println("accept tcp conn :", err.Error())
-			tc.Close()
-			continue
-		}
-
-		go eachConn(backend, tc)
-	}
-	return nil
-}
-
 func main() {
 	var host string
 	var port int64
@@ -107,11 +87,25 @@ func main() {
 		flag.PrintDefaults()
 		return
 	}
-	max := port + pcount
-	for ; port < max; port++ {
-		err := eachListen(local,":"+strconv.FormatInt(port, 10))
+
+	l, err := net.Listen("tcp", local)
+	if err != nil {
+		log.Fatal(err.Error())
+	}
+	defer l.Close()
+	idx := pcount
+	for {
+		tc, err := l.Accept()
 		if err != nil {
-			log.Fatal(err.Error())
+			log.Println("accept tcp conn :", err.Error())
+			tc.Close()
+			continue
+		}
+
+		go eachConn(host+":"+strconv.FormatInt(port+idx,10), tc)
+		idx++
+		if idx == port+pcount {
+			idx = 0
 		}
 	}
 
