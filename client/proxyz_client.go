@@ -93,7 +93,7 @@ func main() {
 		log.Fatal(err.Error())
 	}
 	defer l.Close()
-	idx := pcount
+	var idx int64= 0
 	for {
 		tc, err := l.Accept()
 		if err != nil {
