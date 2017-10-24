@@ -28,6 +28,7 @@ func netCompress(src, dst net.Conn) error {
 	for {
 		nr, err := src.Read(buf)
 		if err != nil {
+			log.Println(err.Error())
 			break
 		}
 		if nr > 0 {
@@ -37,6 +38,7 @@ func netCompress(src, dst net.Conn) error {
 			w.Close()
 			_, err = dst.Write(in.Bytes())
 			if err != nil {
+				log.Println(err.Error())
 				break
 			}
 		}
@@ -49,19 +51,18 @@ func netUnCompress(src, dst net.Conn) error {
 	for {
 		nr, err := src.Read(buf)
 		if err != nil {
+			log.Println(err.Error())
 			break
 		}
 		if nr > 0 {
 			rb := bytes.NewReader(buf[0:nr])
 			var out bytes.Buffer
-			r, err := zlib.NewReader(rb)
-			if err != nil {
-				break
-			}
+			r, _ := zlib.NewReader(rb)
 			io.Copy(&out, r)
 			r.Close()
 			_, err = dst.Write(out.Bytes())
 			if err != nil {
+				log.Println(err.Error())
 				break
 			}
 		}
