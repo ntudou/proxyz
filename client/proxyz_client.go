@@ -15,7 +15,9 @@ func eachConn(remote string, tc net.Conn) {
 	uc, err := net.DialTimeout("tcp", remote, time.Minute)
 	if err != nil {
 		log.Println("get remote conn :", err.Error())
-		uc.Close()
+		if uc!=nil {
+			uc.Close()
+		}
 		return
 	}
 	go netCompress(tc, uc)

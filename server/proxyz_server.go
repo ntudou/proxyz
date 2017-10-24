@@ -15,11 +15,13 @@ func eachConn(remote string, tc net.Conn) {
 	uc, err := net.Dial("tcp", remote)
 	if err != nil {
 		log.Println("get remote conn :", err.Error())
-		uc.Close()
+		if uc != nil {
+			uc.Close()
+		}
 		return
 	}
-	go netCompress(uc,tc)
-	go netUnCompress(tc,uc)
+	go netCompress(uc, tc)
+	go netUnCompress(tc, uc)
 }
 
 func netCompress(src, dst net.Conn) error {
@@ -27,7 +29,7 @@ func netCompress(src, dst net.Conn) error {
 	var err error
 	for {
 		nr, err := src.Read(buf)
-		if err!=nil{
+		if err != nil {
 			log.Println(err.Error())
 			break
 		}
@@ -56,7 +58,7 @@ func netUnCompress(src, dst net.Conn) error {
 		}
 		if nr > 0 {
 			rb := bytes.NewReader(buf[0:nr])
-			out:=&bytes.Buffer{}
+			out := &bytes.Buffer{}
 			r, _ := zlib.NewReader(rb)
 			io.Copy(out, r)
 			r.Close()
