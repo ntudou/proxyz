@@ -33,6 +33,8 @@ func netCompress(src, dst net.Conn) error {
 		if nr > 0 {
 			var in *bytes.Buffer
 			w := zlib.NewWriter(in)
+			log.Println(w)
+			log.Println(buf)
 			_,err=w.Write(buf[0:nr])
 			if err !=nil{
 				log.Println(err.Error())
