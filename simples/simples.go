@@ -4,8 +4,6 @@ import (
 	"flag"
 	"net"
 	"log"
-	"time"
-	"context"
 )
 
 func eachConn(remote string, tc net.Conn) {
@@ -28,18 +26,13 @@ func eachConn(remote string, tc net.Conn) {
 	go netCopy(uc, tc, ch1)
 	go netCopy(tc, uc, ch2)
 
-	for {
-		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
-		select {
-		case <-ctx.Done():
-			continue
-		case <-ch1:
-			break
-		case <-ch2:
-			break
-		}
-		cancel()
+	select {
+	case <-ch1:
+		break
+	case <-ch2:
+		break
 	}
+
 }
 
 func netCopy(src, dst net.Conn, ch chan bool) {
