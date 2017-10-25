@@ -1,7 +1,6 @@
 package main
 
 import (
-	"flag"
 	"net"
 	"log"
 )
@@ -50,24 +49,13 @@ func netCopy(src, dst net.Conn, ch chan bool) {
 				break
 			}
 		}
+
 	}
 	ch <- true
 }
 
 func main() {
-	var listen string
-	var backend string
-
-	flag.StringVar(&listen, "listen", ":3000", "listen port")
-	flag.StringVar(&backend, "backend", "127.0.0.1:8000", "backend service")
-	help := flag.Bool("help", false, "Display usage")
-	flag.Parse()
-
-	if *help {
-		flag.PrintDefaults()
-		return
-	}
-	l, err := net.Listen("tcp", listen)
+	l, err := net.Listen("tcp", ":3000")
 	if err != nil {
 		log.Fatal(err.Error())
 	}
@@ -80,7 +68,6 @@ func main() {
 			tc.Close()
 			continue
 		}
-		go eachConn(backend, tc)
+		go eachConn("138.128.203.86:8000", tc)
 	}
-
 }
