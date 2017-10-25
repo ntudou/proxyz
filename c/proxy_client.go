@@ -84,7 +84,6 @@ func main() {
 		tc, err := l.Accept()
 		if err != nil {
 			log.Println("accept tcp conn :", err.Error())
-			tc.Close()
 			continue
 		}
 

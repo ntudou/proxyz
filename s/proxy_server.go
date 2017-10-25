@@ -67,7 +67,6 @@ func eachListen(listen, backend string) {
 		tc, err := l.Accept()
 		if err != nil {
 			log.Println("accept tcp conn :", err.Error())
-			tc.Close()
 			continue
 		}
 		go eachConn(backend, tc)
