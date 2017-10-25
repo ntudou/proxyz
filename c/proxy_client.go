@@ -4,7 +4,6 @@ import (
 	"flag"
 	"log"
 	"net"
-	"time"
 	"strconv"
 )
 
