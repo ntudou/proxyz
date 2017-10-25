@@ -46,7 +46,7 @@ func netCopy(src, dst net.Conn, ch chan bool) {
 		if nr > 0 {
 			_, err = dst.Write(buf[0:nr])
 			if err != nil {
-				log.Println(err.Error())
+				log.Println(dst.RemoteAddr(),err.Error())
 				break
 			}
 		}
@@ -82,5 +82,8 @@ func main() {
 		}
 		go eachConn(backend, tc)
 	}
+}
 
+func init() {
+	log.SetFlags(log.Lshortfile | log.LstdFlags)
 }

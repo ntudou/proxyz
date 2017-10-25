@@ -9,79 +9,51 @@ import (
 )
 
 func eachConn(remote string, tc net.Conn) {
-	uc, err := net.DialTimeout("tcp", remote, time.Second*6)
-	if err != nil {
-		log.Println("get remote conn :", err.Error())
+	uc, err := net.Dial("tcp", remote)
+	defer func() {
+		if tc != nil {
+			tc.Close()
+		}
 		if uc != nil {
 			uc.Close()
 		}
+	}()
+	if err != nil {
+		log.Println("get remote conn :", err.Error())
 		return
 	}
 	ch1 := make(chan bool)
 	ch2 := make(chan bool)
-	go netCompress(tc, uc, ch1,ch2)
-	go netUnCompress(uc, tc, ch2,ch1)
+
+	go netCopy(uc, tc, ch1)
+	go netCopy(tc, uc, ch2)
+
+	select {
+	case <-ch1:
+		break
+	case <-ch2:
+		break
+	}
 }
 
-func netCompress(src, dst net.Conn, ch1,ch2 chan bool) error {
+func netCopy(src, dst net.Conn, ch chan bool) {
+	defer close(ch)
 	buf := make([]byte, 1024)
-	var err error
 	for {
-		select {
-		case <-ch1:
+		nr, err := src.Read(buf)
+		if err != nil {
+			log.Println(src.RemoteAddr(), err.Error())
 			break
-		default:
-			src.SetReadDeadline(time.Now().Add(time.Second))
-			nr, err := src.Read(buf)
+		}
+		if nr > 0 {
+			_, err = dst.Write(buf[0:nr])
 			if err != nil {
-				if nerr, ok := err.(net.Error); ok && nerr.Timeout() {
-					continue
-				}
-				log.Println(src.RemoteAddr(),err.Error())
+				log.Println(dst.RemoteAddr(),err.Error())
 				break
-			}
-			if nr > 0 {
-				_, err = dst.Write(buf[0:nr])
-				if err != nil {
-					log.Println(err.Error())
-					break
-				}
 			}
 		}
 	}
-	ch2 <- true
-	close(ch1)
-	return err
-}
-func netUnCompress(src, dst net.Conn, ch1,ch2 chan bool) error {
-	buf := make([]byte, 1024)
-	var err error
-	for {
-		select {
-		case <-ch1:
-			break
-		default:
-			src.SetReadDeadline(time.Now().Add(time.Second))
-			nr, err := src.Read(buf)
-			if err != nil {
-				if nerr, ok := err.(net.Error); ok && nerr.Timeout() {
-					continue
-				}
-				log.Println(err.Error())
-				break
-			}
-			if nr > 0 {
-				_, err = dst.Write(buf[0:nr])
-				if err != nil {
-					log.Println(err.Error())
-					break
-				}
-			}
-		}
-	}
-	ch2 <- true
-	close(ch1)
-	return err
+	ch <- true
 }
 
 func main() {
@@ -122,10 +94,6 @@ func main() {
 		if idx == port+pcount {
 			idx = 0
 		}
-	}
-
-	for {
-		time.Sleep(time.Minute)
 	}
 }
 
