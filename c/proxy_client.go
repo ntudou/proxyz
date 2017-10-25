@@ -37,7 +37,7 @@ func eachConn(remote string, tc net.Conn) {
 
 func netCopy(src, dst net.Conn, ch chan bool) {
 	defer close(ch)
-	buf := make([]byte, 1024)
+	buf := make([]byte, 102400)
 	for {
 		nr, err := src.Read(buf)
 		if err != nil {
