@@ -37,7 +37,7 @@ func netCompress(src, dst net.Conn, ch1,ch2 chan bool) error {
 				if nerr, ok := err.(net.Error); ok && nerr.Timeout() {
 					continue
 				}
-				log.Println(err.Error())
+				log.Println(src.RemoteAddr(),err.Error())
 				break
 			}
 			if nr > 0 {
