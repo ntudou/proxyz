@@ -89,7 +89,7 @@ func main() {
 
 		go eachConn(host+":"+strconv.FormatInt(port+idx, 10), tc)
 		idx++
-		if idx == port+pcount {
+		if idx == pcount {
 			idx = 0
 		}
 	}
