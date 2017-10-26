@@ -9,11 +9,14 @@ import (
 	"bytes"
 	"compress/zlib"
 	"io"
+	"encoding/binary"
 )
 
 const (
-	VCODE=3
-	SENDLEN=51200
+	XCODE   = 0x00
+	VCODE   = 1
+	VLENGTH = 2
+	SENDLEN = 51200
 )
 
 func eachConn(remote string, tc net.Conn) {
@@ -33,8 +36,8 @@ func eachConn(remote string, tc net.Conn) {
 	ch1 := make(chan bool)
 	ch2 := make(chan bool)
 
-	go netCopy(uc, tc, ch1)
-	go netCopy(tc, uc, ch2)
+	go netCompress(tc,uc,ch1)
+	go netUnCompress(uc,tc,ch2)
 
 	select {
 	case <-ch1:
@@ -44,7 +47,73 @@ func eachConn(remote string, tc net.Conn) {
 	}
 }
 
-func netCopy(src, dst net.Conn, ch chan bool) {
+func netUnCompress(src, dst net.Conn, ch chan bool) {
+	defer close(ch)
+	for {
+		code_buf := make([]byte, VCODE)
+		nr, err := src.Read(code_buf)
+		if err != nil {
+			log.Println(src.RemoteAddr(), err.Error())
+			break
+		}
+		if XCODE != code_buf[0] {
+			continue
+		}
+		len_buf := make([]byte, VLENGTH)
+		nr, err = src.Read(len_buf)
+		if err != nil {
+			log.Println(src.RemoteAddr(), err.Error())
+			break
+		}
+		if nr != 2 {
+			continue
+		}
+		body_len := binary.BigEndian.Uint16(len_buf)
+		if body_len > SENDLEN {
+			continue
+		}
+		body_buf := make([]byte, body_len)
+		nr, err = src.Read(body_buf)
+		if err != nil {
+			log.Println(src.RemoteAddr(), err.Error())
+			break
+		}
+		packet_buf := &bytes.Buffer{}
+		packet_buf.Write(body_buf)
+		unr := uint16(nr)
+		if unr != body_len {
+			x_len := body_len - unr
+			for {
+				x_buf := make([]byte, x_len)
+				nr, err = src.Read(x_buf)
+				if err!=nil{
+					log.Print(src.RemoteAddr(),err.Error())
+					break
+				}
+				if nr > 0 {
+					err=unCompress(dst,x_buf)
+					if err !=nil{
+						log.Print(dst.RemoteAddr(),err.Error())
+					}
+				}
+				unr = uint16(nr)
+				if x_len-unr == 0 {
+					err=unCompress(dst,packet_buf.Bytes())
+					if err !=nil{
+						log.Print(dst.RemoteAddr(),err.Error())
+					}
+					break
+				} else {
+					x_len = x_len - unr
+					continue
+				}
+			}
+		}
+	}
+	ch <- true
+}
+
+func netCompress(src, dst net.Conn, ch chan bool) {
 	defer close(ch)
 	buf := make([]byte, SENDLEN)
 	for {
@@ -54,9 +123,9 @@ func netCopy(src, dst net.Conn, ch chan bool) {
 			break
 		}
 		if nr > 0 {
-			_, err = dst.Write(buf[0:nr])
+			err = compress(dst,buf[0:nr])
 			if err != nil {
-				log.Println(dst.RemoteAddr(),err.Error())
+				log.Println(dst.RemoteAddr(), err.Error())
 				break
 			}
 		}
@@ -64,61 +133,38 @@ func netCopy(src, dst net.Conn, ch chan bool) {
 	ch <- true
 }
 
-func netCompress(src, dst net.Conn,ch chan bool) {
-	defer close(ch)
-	for {
-		buf := make([]byte, VCODE)
-		nr, err := src.Read(buf)
-		if err != nil {
-			log.Println(src.RemoteAddr(),err.Error())
-			break
-		}
-		if nr!=VCODE{
-			log.Println(src.RemoteAddr(),"vcode length err")
-			break
-		}else {
-
-
-			var in bytes.Buffer
-			w := zlib.NewWriter(&in)
-			w.Write(buf[0:nr])
-			w.Close()
-			_, err = dst.Write(in.Bytes())
-			if err != nil {
-				log.Println(err.Error())
-				break
-			}
-		}
+func compress(dst net.Conn, buf []byte) error {
+	var in bytes.Buffer
+	w := zlib.NewWriter(&in)
+	w.Write(buf)
+	w.Close()
+	var packet_buf []byte
+	var body_len_buf []byte
+	binary.BigEndian.PutUint16(body_len_buf, uint16(in.Len()))
+	packet_buf = append(packet_buf, XCODE)
+	packet_buf = append(packet_buf, body_len_buf...)
+	packet_buf = append(packet_buf, in.Bytes()...)
+	_, err := dst.Write(packet_buf)
+	if err != nil {
+		return  err
 	}
-	ch<-true
+	return nil
 }
-func netUnCompress(src, dst net.Conn) error {
-	buf := make([]byte, 1024)
-	var err error
-	for {
-		nr, err := src.Read(buf)
-		if err != nil {
-			log.Println(err.Error())
-			break
-		}
-		if nr > 0 {
-			rb := bytes.NewReader(buf[0:nr])
-			out := &bytes.Buffer{}
-			r, err := zlib.NewReader(rb)
-			if r==nil{
-				log.Println(err.Error())
-				break
-			}
-			io.Copy(out, r)
-			r.Close()
-			_, err = dst.Write(out.Bytes())
-			if err != nil {
-				log.Println(err.Error())
-				break
-			}
-		}
+
+func unCompress(dst net.Conn, buf []byte) error {
+	rb := bytes.NewReader(buf)
+	out := &bytes.Buffer{}
+	r, err := zlib.NewReader(rb)
+	if err!= nil {
+		return err
 	}
-	return err
+	io.Copy(out, r)
+	r.Close()
+	_, err = dst.Write(out.Bytes())
+	if err != nil {
+		return err
+	}
+	return  nil
 }
 
 func eachListen(listen, backend string) {
