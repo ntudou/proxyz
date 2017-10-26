@@ -6,34 +6,79 @@ import (
 	"net"
 	"time"
 	"strconv"
-	"compress/zlib"
 	"bytes"
+	"compress/zlib"
 	"io"
+)
+
+const (
+	VCODE=3
+	SENDLEN=51200
 )
 
 func eachConn(remote string, tc net.Conn) {
 	uc, err := net.Dial("tcp", remote)
-	if err != nil {
-		log.Println("get remote conn :", err.Error())
+	defer func() {
+		if tc != nil {
+			tc.Close()
+		}
 		if uc != nil {
 			uc.Close()
 		}
+	}()
+	if err != nil {
+		log.Println("get remote conn :", err.Error())
 		return
 	}
-	go netCompress(uc, tc)
-	go netUnCompress(tc, uc)
+	ch1 := make(chan bool)
+	ch2 := make(chan bool)
+
+	go netCopy(uc, tc, ch1)
+	go netCopy(tc, uc, ch2)
+
+	select {
+	case <-ch1:
+		break
+	case <-ch2:
+		break
+	}
 }
 
-func netCompress(src, dst net.Conn) error {
-	buf := make([]byte, 1024)
-	var err error
+func netCopy(src, dst net.Conn, ch chan bool) {
+	defer close(ch)
+	buf := make([]byte, SENDLEN)
 	for {
 		nr, err := src.Read(buf)
 		if err != nil {
-			log.Println(err.Error())
+			log.Println(src.RemoteAddr(), err.Error())
 			break
 		}
 		if nr > 0 {
+			_, err = dst.Write(buf[0:nr])
+			if err != nil {
+				log.Println(dst.RemoteAddr(),err.Error())
+				break
+			}
+		}
+	}
+	ch <- true
+}
+
+func netCompress(src, dst net.Conn,ch chan bool) {
+	defer close(ch)
+	for {
+		buf := make([]byte, VCODE)
+		nr, err := src.Read(buf)
+		if err != nil {
+			log.Println(src.RemoteAddr(),err.Error())
+			break
+		}
+		if nr!=VCODE{
+			log.Println(src.RemoteAddr(),"vcode length err")
+			break
+		}else {
+
+
 			var in bytes.Buffer
 			w := zlib.NewWriter(&in)
 			w.Write(buf[0:nr])
@@ -45,7 +90,7 @@ func netCompress(src, dst net.Conn) error {
 			}
 		}
 	}
-	return err
+	ch<-true
 }
 func netUnCompress(src, dst net.Conn) error {
 	buf := make([]byte, 1024)
@@ -87,7 +132,6 @@ func eachListen(listen, backend string) {
 		tc, err := l.Accept()
 		if err != nil {
 			log.Println("accept tcp conn :", err.Error())
-			tc.Close()
 			continue
 		}
 		go eachConn(backend, tc)
