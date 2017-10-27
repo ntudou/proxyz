@@ -16,7 +16,7 @@ const (
 	XCODE   = 0x00
 	VCODE   = 1
 	VLENGTH = 2
-	SENDLEN = 51200
+	SENDLEN = 1280
 )
 
 func eachConn(remote string, tc net.Conn) {
@@ -48,13 +48,16 @@ func eachConn(remote string, tc net.Conn) {
 }
 
 func netUnCompress(src, dst net.Conn, ch chan bool) {
-	defer close(ch)
+	defer func() {
+		ch <- true
+		close(ch)
+	}()
 	for {
 		code_buf := make([]byte, VCODE)
 		nr, err := src.Read(code_buf)
 		if err != nil {
 			log.Println(src.RemoteAddr(), err.Error())
-			break
+			return
 		}
 		if XCODE != code_buf[0] {
 			continue
@@ -63,7 +66,7 @@ func netUnCompress(src, dst net.Conn, ch chan bool) {
 		nr, err = src.Read(len_buf)
 		if err != nil {
 			log.Println(src.RemoteAddr(), err.Error())
-			break
+			return
 		}
 		if nr != 2 {
 			continue
@@ -72,65 +75,52 @@ func netUnCompress(src, dst net.Conn, ch chan bool) {
 		if body_len > SENDLEN {
 			continue
 		}
-		body_buf := make([]byte, body_len)
-		nr, err = src.Read(body_buf)
-		if err != nil {
-			log.Println(src.RemoteAddr(), err.Error())
-			break
-		}
-		packet_buf := &bytes.Buffer{}
-		packet_buf.Write(body_buf)
-		unr := uint16(nr)
-		if unr != body_len {
-			x_len := body_len - unr
-			for {
-				x_buf := make([]byte, x_len)
-				nr, err = src.Read(x_buf)
-				if err!=nil{
-					log.Print(src.RemoteAddr(),err.Error())
-					break
+
+		var body_buf []byte
+		for{
+			x_buf := make([]byte, body_len)
+			nr, err = src.Read(x_buf)
+			if err!=nil{
+				log.Print(src.RemoteAddr(),err.Error())
+				return
+			}
+			if nr>0{
+				body_buf=append(body_buf,x_buf...)
+			}
+			body_len=body_len-uint16(nr)
+			if body_len == 0 {
+				err=unCompress(dst,body_buf)
+				if err !=nil{
+					log.Print(dst.RemoteAddr(),err.Error())
+					return
 				}
-				if nr > 0 {
-					err=unCompress(dst,x_buf)
-					if err !=nil{
-						log.Print(dst.RemoteAddr(),err.Error())
-					}
-				}
-				unr = uint16(nr)
-				if x_len-unr == 0 {
-					err=unCompress(dst,packet_buf.Bytes())
-					if err !=nil{
-						log.Print(dst.RemoteAddr(),err.Error())
-					}
-					break
-				} else {
-					x_len = x_len - unr
-					continue
-				}
+				break
 			}
 		}
 	}
-	ch <- true
 }
 
 func netCompress(src, dst net.Conn, ch chan bool) {
-	defer close(ch)
+	defer func() {
+		ch <- true
+		close(ch)
+	}()
 	buf := make([]byte, SENDLEN)
 	for {
 		nr, err := src.Read(buf)
 		if err != nil {
 			log.Println(src.RemoteAddr(), err.Error())
-			break
+			return
 		}
 		if nr > 0 {
 			err = compress(dst,buf[0:nr])
 			if err != nil {
 				log.Println(dst.RemoteAddr(), err.Error())
-				break
+				return
 			}
 		}
 	}
-	ch <- true
+
 }
 
 func compress(dst net.Conn, buf []byte) error {
