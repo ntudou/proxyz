@@ -36,8 +36,8 @@ func eachConn(remote string, tc net.Conn) {
 	ch1 := make(chan bool)
 	ch2 := make(chan bool)
 
-	go netCompress(tc,uc,ch1)
-	go netUnCompress(uc,tc,ch2)
+	go netCompress(uc,tc,ch1)
+	go netUnCompress(tc,uc,ch2)
 
 	select {
 	case <-ch1:
