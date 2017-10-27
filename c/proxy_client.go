@@ -36,7 +36,10 @@ func eachConn(remote string, tc net.Conn) {
 }
 
 func netCopy(src, dst net.Conn, ch chan bool) {
-	defer close(ch)
+	defer func() {
+		ch <- true
+		close(ch)
+	}()
 	buf := make([]byte, 102400)
 	for {
 		nr, err := src.Read(buf)
@@ -52,7 +55,6 @@ func netCopy(src, dst net.Conn, ch chan bool) {
 			}
 		}
 	}
-	ch <- true
 }
 
 func main() {

@@ -37,23 +37,25 @@ func eachConn(remote string, tc net.Conn) {
 }
 
 func netCopy(src, dst net.Conn, ch chan bool) {
-	defer close(ch)
+	defer func() {
+		ch <- true
+		close(ch)
+	}()
 	buf := make([]byte, 102400)
 	for {
 		nr, err := src.Read(buf)
 		if err != nil {
 			log.Println(src.RemoteAddr(), err.Error())
-			break
+			return
 		}
 		if nr > 0 {
 			_, err = dst.Write(buf[0:nr])
 			if err != nil {
 				log.Println(dst.RemoteAddr(),err.Error())
-				break
+				return 
 			}
 		}
 	}
-	ch <- true
 }
 
 func eachListen(listen, backend string) {
