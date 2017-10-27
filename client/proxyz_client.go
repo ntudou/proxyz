@@ -127,8 +127,8 @@ func compress(dst net.Conn, buf []byte) error {
 	w.Write(buf)
 	w.Close()
 	var packet_buf []byte
-	var body_len_buf []byte
-	binary.BigEndian.PutUint16(body_len_buf, uint16(len(in.Bytes())))
+	body_len_buf:=make([]byte,2)
+	binary.BigEndian.PutUint16(body_len_buf, uint16(in.Len()))
 	packet_buf = append(packet_buf, XCODE)
 	packet_buf = append(packet_buf, body_len_buf...)
 	packet_buf = append(packet_buf, in.Bytes()...)
