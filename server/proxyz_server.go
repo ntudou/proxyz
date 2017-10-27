@@ -120,7 +120,6 @@ func netCompress(src, dst net.Conn, ch chan bool) {
 			}
 		}
 	}
-
 }
 
 func compress(dst net.Conn, buf []byte) error {
