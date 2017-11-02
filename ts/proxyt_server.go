@@ -63,7 +63,6 @@ func netCopy(src, dst net.Conn, ch chan bool) {
 			log.Println(src.RemoteAddr(), err.Error())
 			return
 		}
-		tmp_buf:=buf[0:nr]
 		reverse(buf,nr)
 		if nr > 0 {
 			dst.SetWriteDeadline(time.Now().Add(TIMEOUT))
