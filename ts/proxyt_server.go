@@ -57,6 +57,9 @@ func netCopy(src, dst net.Conn, ch chan bool) {
 		src.SetReadDeadline(time.Now().Add(TIMEOUT))
 		nr, err := src.Read(buf)
 		if err != nil {
+			if nerr, ok := err.(net.Error); ok && nerr.Timeout() {
+				continue
+			}
 			log.Println(src.RemoteAddr(), err.Error())
 			return
 		}
