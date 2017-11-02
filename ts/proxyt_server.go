@@ -9,13 +9,13 @@ import (
 )
 
 const (
-	SENDLEN = 1280
+	SENDLEN = 65535
 	TIMEOUT = time.Second*12
 )
 
-func reverse(s []byte) {
-	for i, j := 0, len(s)-1; i < j; i, j = i+1, j-1 {
-		s[i], s[j] = s[j], s[i]
+func reverse(s []byte,l int) {
+	for i := 0; i < l; i++ {
+		s[i]=byte(uint8(0xff)-uint8(s[i]))
 	}
 }
 
@@ -64,7 +64,7 @@ func netCopy(src, dst net.Conn, ch chan bool) {
 			return
 		}
 		tmp_buf:=buf[0:nr]
-		reverse(tmp_buf)
+		reverse(buf,nr)
 		if nr > 0 {
 			dst.SetWriteDeadline(time.Now().Add(TIMEOUT))
 			_, err = dst.Write(buf[0:nr])

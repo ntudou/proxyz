@@ -8,8 +8,13 @@ import (
 	"strconv"
 )
 
+const (
+	SENDLEN = 1280
+	TIMEOUT = time.Second*12
+)
+
 func eachConn(remote string, tc net.Conn) {
-	uc, err := net.Dial("tcp", remote)
+	uc, err := net.DialTimeout("tcp", remote,TIMEOUT)
 	defer func() {
 		if tc != nil {
 			tc.Close()
@@ -41,7 +46,7 @@ func netCopy(src, dst net.Conn, ch chan bool) {
 		ch <- true
 		close(ch)
 	}()
-	buf := make([]byte, 102400)
+	buf := make([]byte, SENDLEN)
 	for {
 		nr, err := src.Read(buf)
 		if err != nil {
