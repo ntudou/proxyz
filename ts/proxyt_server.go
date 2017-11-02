@@ -8,6 +8,17 @@ import (
 	"strconv"
 )
 
+const (
+	SENDLEN = 1280
+	TIMEOUT = time.Second*12
+)
+
+func reverse(s []byte) {
+	for i, j := 0, len(s)-1; i < j; i, j = i+1, j-1 {
+		s[i], s[j] = s[j], s[i]
+	}
+}
+
 func eachConn(remote string, tc net.Conn) {
 	uc, err := net.Dial("tcp", remote)
 	defer func() {
@@ -41,14 +52,18 @@ func netCopy(src, dst net.Conn, ch chan bool) {
 		ch <- true
 		close(ch)
 	}()
-	buf := make([]byte, 102400)
+	buf := make([]byte, SENDLEN)
 	for {
+		src.SetReadDeadline(time.Now().Add(TIMEOUT))
 		nr, err := src.Read(buf)
 		if err != nil {
 			log.Println(src.RemoteAddr(), err.Error())
 			return
 		}
+		tmp_buf:=buf[0:nr]
+		reverse(tmp_buf)
 		if nr > 0 {
+			dst.SetWriteDeadline(time.Now().Add(TIMEOUT))
 			_, err = dst.Write(buf[0:nr])
 			if err != nil {
 				log.Println(dst.RemoteAddr(),err.Error())

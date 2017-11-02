@@ -4,12 +4,23 @@ import (
 	"flag"
 	"log"
 	"net"
-	"time"
 	"strconv"
+	"time"
 )
 
+const (
+	SENDLEN = 1280
+	TIMEOUT = time.Second*12
+)
+
+func reverse(s []byte) {
+	for i, j := 0, len(s)-1; i < j; i, j = i+1, j-1 {
+		s[i], s[j] = s[j], s[i]
+	}
+}
+
 func eachConn(remote string, tc net.Conn) {
-	uc, err := net.Dial("tcp", remote)
+	uc, err := net.DialTimeout("tcp", remote,TIMEOUT)
 	defer func() {
 		if tc != nil {
 			tc.Close()
@@ -41,48 +52,38 @@ func netCopy(src, dst net.Conn, ch chan bool) {
 		ch <- true
 		close(ch)
 	}()
-	buf := make([]byte, 102400)
+	buf := make([]byte, SENDLEN)
 	for {
+		src.SetReadDeadline(time.Now().Add(TIMEOUT))
 		nr, err := src.Read(buf)
 		if err != nil {
 			log.Println(src.RemoteAddr(), err.Error())
-			return
+			break
 		}
+		tmp_buf:=buf[0:nr]
+		reverse(tmp_buf)
 		if nr > 0 {
-			_, err = dst.Write(buf[0:nr])
+			dst.SetWriteDeadline(time.Now().Add(TIMEOUT))
+			_, err = dst.Write(tmp_buf)
 			if err != nil {
 				log.Println(dst.RemoteAddr(),err.Error())
-				return
+				break
 			}
 		}
 	}
 }
 
-func eachListen(listen, backend string) {
-	l, err := net.Listen("tcp", listen)
-	if err != nil {
-		log.Fatal(err.Error())
-	}
-	defer l.Close()
-
-	for {
-		tc, err := l.Accept()
-		if err != nil {
-			log.Println("accept tcp conn :", err.Error())
-			continue
-		}
-		go eachConn(backend, tc)
-	}
-}
-
 func main() {
-	var remote string
-	var local int64
+	var host string
+	var port int64
+	var local string
 	var pcount int64
 
-	flag.Int64Var(&local, "local", 3000, "local port")
+	flag.StringVar(&local, "local", ":3000", "local port")
+	flag.StringVar(&host, "host", "127.0.0.1", "host")
+	flag.Int64Var(&port, "port", 3000, "port")
 	flag.Int64Var(&pcount, "pcount", 20, "port count")
-	flag.StringVar(&remote, "remote", "127.0.0.1:3306", "remote")
+
 	help := flag.Bool("help", false, "Display usage")
 	flag.Parse()
 
@@ -90,13 +91,25 @@ func main() {
 		flag.PrintDefaults()
 		return
 	}
-	max := local + pcount
-	for ; local < max; local++ {
-		go eachListen(":"+strconv.FormatInt(local, 10), remote)
-	}
 
+	l, err := net.Listen("tcp", local)
+	if err != nil {
+		log.Fatal(err.Error())
+	}
+	defer l.Close()
+	var idx int64 = 0
 	for {
-		time.Sleep(time.Minute)
+		tc, err := l.Accept()
+		if err != nil {
+			log.Println("accept tcp conn :", err.Error())
+			continue
+		}
+
+		go eachConn(host+":"+strconv.FormatInt(port+idx, 10), tc)
+		idx++
+		if idx == pcount {
+			idx = 0
+		}
 	}
 }
 
