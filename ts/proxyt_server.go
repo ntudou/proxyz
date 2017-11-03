@@ -9,13 +9,14 @@ import (
 )
 
 const (
-	SENDLEN = 65535
-	TIMEOUT = time.Second*12
+	SENDLEN  = 65535
+	TIMEOUT  = time.Second * 12
+	MAXSLEEP = 300
 )
 
-func reverse(s []byte,l int) {
+func reverse(s []byte, l int) {
 	for i := 0; i < l; i++ {
-		s[i]=byte(uint8(0xff)-uint8(s[i]))
+		s[i] = byte(uint8(0xff) - uint8(s[i]))
 	}
 }
 
@@ -53,7 +54,7 @@ func netCopy(src, dst net.Conn, ch chan bool) {
 		close(ch)
 	}()
 	buf := make([]byte, SENDLEN)
-	for {
+	for idx := 0; idx < MAXSLEEP; idx++ {
 		src.SetReadDeadline(time.Now().Add(TIMEOUT))
 		nr, err := src.Read(buf)
 		if err != nil {
@@ -63,12 +64,13 @@ func netCopy(src, dst net.Conn, ch chan bool) {
 			log.Println(src.RemoteAddr(), err.Error())
 			return
 		}
-		reverse(buf,nr)
 		if nr > 0 {
+			idx = 0
+			reverse(buf, nr)
 			dst.SetWriteDeadline(time.Now().Add(TIMEOUT))
 			_, err = dst.Write(buf[0:nr])
 			if err != nil {
-				log.Println(dst.RemoteAddr(),err.Error())
+				log.Println(dst.RemoteAddr(), err.Error())
 				return
 			}
 		}

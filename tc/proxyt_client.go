@@ -9,18 +9,19 @@ import (
 )
 
 const (
-	SENDLEN = 65535
-	TIMEOUT = time.Second*12
+	SENDLEN  = 65535
+	TIMEOUT  = time.Second * 12
+	MAXSLEEP = 300
 )
 
-func reverse(s []byte,l int) {
+func reverse(s []byte, l int) {
 	for i := 0; i < l; i++ {
-		s[i]=byte(uint8(0xff)-uint8(s[i]))
+		s[i] = byte(uint8(0xff) - uint8(s[i]))
 	}
 }
 
 func eachConn(remote string, tc net.Conn) {
-	uc, err := net.DialTimeout("tcp", remote,TIMEOUT)
+	uc, err := net.DialTimeout("tcp", remote, TIMEOUT)
 	defer func() {
 		if tc != nil {
 			tc.Close()
@@ -53,7 +54,7 @@ func netCopy(src, dst net.Conn, ch chan bool) {
 		close(ch)
 	}()
 	buf := make([]byte, SENDLEN)
-	for {
+	for idx := 0; idx < MAXSLEEP; idx++ {
 		src.SetReadDeadline(time.Now().Add(TIMEOUT))
 		nr, err := src.Read(buf)
 		if err != nil {
@@ -63,12 +64,13 @@ func netCopy(src, dst net.Conn, ch chan bool) {
 			log.Println(src.RemoteAddr(), err.Error())
 			break
 		}
-		reverse(buf,nr)
 		if nr > 0 {
+			idx = 0
+			reverse(buf, nr)
 			dst.SetWriteDeadline(time.Now().Add(TIMEOUT))
 			_, err = dst.Write(buf[:nr])
 			if err != nil {
-				log.Println(dst.RemoteAddr(),err.Error())
+				log.Println(dst.RemoteAddr(), err.Error())
 				break
 			}
 		}
