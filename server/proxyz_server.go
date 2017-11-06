@@ -6,18 +6,20 @@ import (
 	"net"
 	"time"
 	"strconv"
-	"bytes"
-	"compress/zlib"
-	"io"
-	"encoding/binary"
 )
 
 const (
-	XCODE   = 0x00
-	VCODE   = 1
-	VLENGTH = 2
-	SENDLEN = 1280
+	SENDLEN  = 65535
+	TIMEOUT  = time.Second * 12
+	MAXSLEEP = 300
+	MOD = 187
 )
+
+func reverse(s []byte, l int) {
+	for i := 0; i < l; i++ {
+		s[i] = s[i] ^ MOD
+	}
+}
 
 func eachConn(remote string, tc net.Conn) {
 	uc, err := net.Dial("tcp", remote)
@@ -36,8 +38,8 @@ func eachConn(remote string, tc net.Conn) {
 	ch1 := make(chan bool)
 	ch2 := make(chan bool)
 
-	go netCompress(uc,tc,ch1)
-	go netUnCompress(tc,uc,ch2)
+	go netCopy(uc, tc, ch1)
+	go netCopy(tc, uc, ch2)
 
 	select {
 	case <-ch1:
@@ -47,113 +49,33 @@ func eachConn(remote string, tc net.Conn) {
 	}
 }
 
-func netUnCompress(src, dst net.Conn, ch chan bool) {
-	defer func() {
-		ch <- true
-		close(ch)
-	}()
-	for {
-		code_buf := make([]byte, VCODE)
-		nr, err := src.Read(code_buf)
-		if err != nil {
-			log.Println(src.RemoteAddr(), err.Error())
-			return
-		}
-		if XCODE != code_buf[0] {
-			continue
-		}
-		len_buf := make([]byte, VLENGTH)
-		nr, err = src.Read(len_buf)
-		if err != nil {
-			log.Println(src.RemoteAddr(), err.Error())
-			return
-		}
-		if nr != 2 {
-			continue
-		}
-		body_len := binary.BigEndian.Uint16(len_buf)
-		if body_len > SENDLEN {
-			continue
-		}
-
-		var body_buf []byte
-		for{
-			x_buf := make([]byte, body_len)
-			nr, err = src.Read(x_buf)
-			if err!=nil{
-				log.Print(src.RemoteAddr(),err.Error())
-				return
-			}
-			if nr>0{
-				body_buf=append(body_buf,x_buf...)
-			}
-			body_len=body_len-uint16(nr)
-			if body_len == 0 {
-				err=unCompress(dst,body_buf)
-				if err !=nil{
-					log.Print(dst.RemoteAddr(),err.Error())
-					return
-				}
-				break
-			}
-		}
-	}
-}
-
-func netCompress(src, dst net.Conn, ch chan bool) {
+func netCopy(src, dst net.Conn, ch chan bool) {
 	defer func() {
 		ch <- true
 		close(ch)
 	}()
 	buf := make([]byte, SENDLEN)
-	for {
+	for idx := 0; idx < MAXSLEEP; idx++ {
+		src.SetReadDeadline(time.Now().Add(TIMEOUT))
 		nr, err := src.Read(buf)
 		if err != nil {
+			if nerr, ok := err.(net.Error); ok && nerr.Timeout() {
+				continue
+			}
 			log.Println(src.RemoteAddr(), err.Error())
 			return
 		}
 		if nr > 0 {
-			err = compress(dst,buf[0:nr])
+			idx = 0
+			reverse(buf, nr)
+			dst.SetWriteDeadline(time.Now().Add(TIMEOUT))
+			_, err = dst.Write(buf[0:nr])
 			if err != nil {
 				log.Println(dst.RemoteAddr(), err.Error())
 				return
 			}
 		}
 	}
-}
-
-func compress(dst net.Conn, buf []byte) error {
-	var in bytes.Buffer
-	w := zlib.NewWriter(&in)
-	w.Write(buf)
-	w.Close()
-	var packet_buf []byte
-	body_len_buf:=make([]byte,2)
-	binary.BigEndian.PutUint16(body_len_buf, uint16(in.Len()))
-	packet_buf = append(packet_buf, XCODE)
-	packet_buf = append(packet_buf, body_len_buf...)
-	packet_buf = append(packet_buf, in.Bytes()...)
-	_, err := dst.Write(packet_buf)
-	if err != nil {
-		return  err
-	}
-	return nil
-}
-
-func unCompress(dst net.Conn, buf []byte) error {
-	rb := bytes.NewReader(buf)
-	out := &bytes.Buffer{}
-	r, err := zlib.NewReader(rb)
-	if err!= nil {
-		return err
-	}
-	io.Copy(out, r)
-	r.Close()
-	_, err = dst.Write(out.Bytes())
-	if err != nil {
-		return err
-	}
-	return  nil
 }
 
 func eachListen(listen, backend string) {
